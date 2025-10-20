@@ -13,6 +13,18 @@
   $env:DEBUG="1"
   python main.py
 
+## exeファイル
+Remove-Item -Recurse -Force .\dist, .\build -ErrorAction SilentlyContinue
+pyinstaller `
+  --noconfirm --clean --onefile --windowed `
+  --name "TeamsLinkScheduler" `
+  --collect-submodules win32com `
+  --hidden-import pythoncom `
+  --hidden-import pywintypes `
+  --add-data "logo.png;." `
+  .\main.py
+
+
 ## 備考
 - 管理者タスクは管理者で起動したシェルから実行。
 - エラー 0x8007007B はパス不正。v1.1 は絶対パスの cmd.exe を使用。
