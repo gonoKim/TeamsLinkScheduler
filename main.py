@@ -15,6 +15,8 @@ except ImportError:
     win32com = None
     pythoncom = None
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGO_PATH = os.path.join(BASE_DIR, "logo.png")   # 로고 파일명
 APP_TITLE = "Teams Link Scheduler (COM)"
 TASK_FOLDER = r"\TeamsLinks"   # <-- single leading slash only
 DEFAULT_TASK_PREFIX = ""
@@ -120,6 +122,20 @@ def run_task_now(task_name):
 class App(tk.Tk):
     def __init__(self):
         super().__init__(); self.title(APP_TITLE); self.geometry("840x660"); self.minsize(780,560)
+          # === 여기부터 추가: 상단 로고 ===
+        self.logo_img = None
+        if os.path.exists(LOGO_PATH):
+            try:
+                self.logo_img = tk.PhotoImage(file=LOGO_PATH)
+                try:
+                    self.iconphoto(True, self.logo_img)
+                except Exception:
+                    pass
+                top = ttk.Frame(self)
+                top.pack(fill="x", padx=8, pady=8)
+                ttk.Label(top, image=self.logo_img).pack()
+            except Exception as e:
+                print("[Logo] load failed:", e, file=sys.stderr)
         self.create_widgets(); self.refresh_tasks()
     def create_widgets(self):
         pad={"padx":8,"pady":6}; frm=ttk.LabelFrame(self,text="スケジュール作成"); frm.pack(fill="x",**pad)
