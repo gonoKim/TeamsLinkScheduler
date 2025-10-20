@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+
+# Virtual environment
+.venv/
+env/
+venv/
+Scripts/
+Lib/
+Include/
+
+# Windows / VSCode
+Thumbs.db
+Desktop.ini
+*.bat~
+*.tmp
+*.bak
+.vscode/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# IDE / Editor
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Debug logs
+debug_stderr.log
+
+# OS
+.DS_Store
