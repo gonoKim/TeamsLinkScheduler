@@ -22,6 +22,7 @@ pyinstaller `
   --hidden-import pythoncom `
   --hidden-import pywintypes `
   --add-data "logo.png;." `
+  --add-data "logo_spi.png;." `
   .\main.py
 
 
