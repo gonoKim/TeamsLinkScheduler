@@ -7,7 +7,7 @@
 import os, sys, re, traceback
 import tkinter as tk
 from tkinter import ttk, messagebox
-from datetime import datetime
+from datetime import datetime, timezone
 try:
     import win32com.client
     import pythoncom
@@ -42,23 +42,35 @@ def extract_url_from_cmdargs(args: str) -> str:
 def apply_task_to_form(self, task_name: str):
     info = get_task_info(task_name)
 
-    # 값 채우기
+    # 기본 값들
     self.name_var.set(info.get("name", ""))
     self.url_var.set(info.get("url", ""))
 
-    # 스케줄 콤보(일본어 라벨 대응)
+    # 빈번도(일본어 라벨 반영)
+    sched_key = info.get("schedule", "ONCE")
     if 'SCHEDULE_LABELS' in globals():
-        self.schedule_var.set(SCHEDULE_LABELS.get(info.get("schedule","ONCE"), info.get("schedule","ONCE")))
+        self.schedule_var.set(SCHEDULE_LABELS.get(sched_key, sched_key))
     else:
-        self.schedule_var.set(info.get("schedule","ONCE"))
+        self.schedule_var.set(sched_key)
 
-    # 입력 비활성(그레이아웃)
-    self.entry_name.configure(state="disabled")
-    self.entry_url.configure(state="disabled")
-    # 필요하면 스케줄도 잠그기
-    # self.combo_schedule.configure(state="disabled")
+    # 날짜/시간
+    self.date_var.set(info.get("start_date", ""))
+    self.time_var.set(info.get("start_time", ""))
 
-    self.status.set(f"編集中: {task_name}")
+    # 요일 체크 (weekly일 때만)
+    weekdays = set(info.get("weekdays", []))
+    for code, var in self.weekly_vars.items():
+        var.set(code in weekdays)
+
+    # WEEKLY가 아니면 요일 전부 false로 정리(표시 일관성)
+    if sched_key != "WEEKLY":
+        for var in self.weekly_vars.values():
+            var.set(False)
+
+    # 전 항목 비활성화
+    self._lock_all_inputs()
+
+    self.status.set(f"選択中: {task_name}")
 
 def debug(*a):
     if os.environ.get("DEBUG") == "1":
@@ -147,28 +159,74 @@ def delete_task(task_name):
 def run_task_now(task_name):
     require_pywin32(); svc=connect_service(); folder=get_or_create_folder(svc, TASK_FOLDER); folder.GetTask(task_name).Run("")
 
+def _parse_start_boundary(sb: str):
+    """'2025-10-21T09:55:00' / '...Z' / '...+09:00'"""
+    if not sb:
+        return "", ""
+    s = sb.replace("Z", "+00:00") if sb.endswith("Z") else sb
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        try:
+            dt = datetime.fromisoformat(s.split(".")[0])
+        except Exception:
+            return "", ""
+    return dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")
+
+def _days_mask_to_codes(mask: int):
+    """Task Scheduler の DaysOfWeek → ['MON','WED',...]"""
+    out = []
+    for code, bit in DAYS.items():
+        if mask & bit:
+            out.append(code)
+    return out
+
 def get_task_info(task_name: str):
-    """タスク名, URL, スケジュール種別(ONCE/DAILY/WEEKLY)을 반환"""
+    """タスク名, URL, スケジュール種別, 開始日, 時刻, 曜日(weekly時) を返す"""
     require_pywin32()
     svc = connect_service()
     folder = get_or_create_folder(svc, TASK_FOLDER)
     t = folder.GetTask(task_name)
     td = t.Definition
 
+    # URL
     try:
-        act = td.Actions.Item(1)   # 1-based
+        act = td.Actions.Item(1)
     except Exception:
         act = next(iter(td.Actions), None)
     url = extract_url_from_cmdargs(getattr(act, "Arguments", "")) if act else ""
 
+    # Trigger
     try:
         trig = td.Triggers.Item(1)
     except Exception:
         trig = next(iter(td.Triggers), None)
-    trig_type = int(getattr(trig, "Type", TASK_TRIGGER_TIME) or TASK_TRIGGER_TIME)
-    schedule_key = {TASK_TRIGGER_TIME: "ONCE", TASK_TRIGGER_DAILY: "DAILY", TASK_TRIGGER_WEEKLY: "WEEKLY"}.get(trig_type, "ONCE")
 
-    return {"name": t.Name, "url": url, "schedule": schedule_key}
+    trig_type = int(getattr(trig, "Type", TASK_TRIGGER_TIME) or TASK_TRIGGER_TIME)
+    schedule_key = {
+        TASK_TRIGGER_TIME: "ONCE",
+        TASK_TRIGGER_DAILY: "DAILY",
+        TASK_TRIGGER_WEEKLY: "WEEKLY"
+    }.get(trig_type, "ONCE")
+
+    start_date, start_time = _parse_start_boundary(getattr(trig, "StartBoundary", "") or "")
+
+    weekdays_codes = []
+    if schedule_key == "WEEKLY":
+        try:
+            mask = int(getattr(trig, "DaysOfWeek", 0) or 0)
+        except Exception:
+            mask = 0
+        weekdays_codes = _days_mask_to_codes(mask)
+
+    return {
+        "name": t.Name,
+        "url": url,
+        "schedule": schedule_key,
+        "start_date": start_date,
+        "start_time": start_time,
+        "weekdays": weekdays_codes
+    }
 
 
 class App(tk.Tk):
@@ -199,13 +257,20 @@ class App(tk.Tk):
         ttk.Label(frm,text="頻度").grid(row=2,column=0,sticky="w",**pad); self.schedule_var = tk.StringVar(value=SCHEDULE_LABELS["WEEKLY"])
         self.combo_schedule = ttk.Combobox(frm,textvariable=self.schedule_var,state="readonly",width=10,values=list(SCHEDULE_LABELS.values()))
         self.combo_schedule.grid(row=2,column=1,sticky="w",**pad)
+        
         ttk.Label(frm,text="開始日（YYYY-MM-DD）").grid(row=2,column=2,sticky="e",**pad); self.date_var=tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
-        ttk.Entry(frm,textvariable=self.date_var,width=14).grid(row=2,column=3,sticky="w",**pad)
+        self.entry_date = ttk.Entry(frm,textvariable=self.date_var,width=14)
+        self.entry_date.grid(row=2,column=3,sticky="w",**pad)
         ttk.Label(frm,text="時刻（HH:MM 24h）").grid(row=3,column=2,sticky="e",**pad); self.time_var=tk.StringVar(value="09:55")
-        ttk.Entry(frm,textvariable=self.time_var,width=10).grid(row=3,column=3,sticky="w",**pad)
-        self.weekly_vars={}; days_frame=ttk.Frame(frm); days_frame.grid(row=3,column=1,sticky="w",**pad)
-        for i,(label,code) in enumerate([("月","MON"),("火","TUE"),("水","WED"),("木","THU"),("金","FRI"),("土","SAT"),("日","SUN")]):
-            v=tk.BooleanVar(value=(code in ["MON","TUE","WED","THU","FRI"])); self.weekly_vars[code]=v; ttk.Checkbutton(days_frame,text=label,variable=v).grid(row=0,column=i,sticky="w")
+        self.entry_time = ttk.Entry(frm,textvariable=self.time_var,width=10)
+        self.entry_time.grid(row=3,column=3,sticky="w",**pad)
+        self.weekly_vars={}; 
+        self.days_frame=ttk.Frame(frm); 
+        self.days_frame.grid(row=3,column=1,sticky="w",**pad)
+        for i, (label, code) in enumerate([("月","MON"),("火","TUE"),("水","WED"),("木","THU"),("金","FRI"),("土","SAT"),("日","SUN")]):
+            v = tk.BooleanVar(value=(code in ["MON","TUE","WED","THU","FRI"]))
+            self.weekly_vars[code] = v
+            ttk.Checkbutton(self.days_frame, text=label, variable=v).grid(row=0, column=i, sticky="w")
         # self.admin_var=tk.BooleanVar(value=False); ttk.Checkbutton(frm,text="管理者権限で実行（要：Pythonを管理者で起動）",variable=self.admin_var).grid(row=4,column=1,columnspan=3,sticky="w",**pad)
         btn_fr=ttk.Frame(frm); btn_fr.grid(row=5,column=0,columnspan=4,sticky="e",**pad)
         ttk.Button(btn_fr,text="作成/更新",command=self.on_create).pack(side="left",padx=4); ttk.Button(btn_fr,text="再読み込み",command=self.refresh_tasks).pack(side="left",padx=4)
@@ -289,15 +354,38 @@ class App(tk.Tk):
             sel = self.tree.selection()
             if not sel:
                 return
-            item_id = sel[0]
-            values = self.tree.item(item_id, "values") or ()
-            if not values:
-                return
-            task_name = values[0]
-            apply_task_to_form(self, task_name)  # ← 전역 함수 호출
+            task_name = self.tree.item(sel[0], "values")[0]
+            apply_task_to_form(self, task_name)
         except Exception as e:
             self.status.set(f"反映失敗: {e}")
+    def _set_weekday_checks_enabled(self, enabled: bool):
+        state = ("!disabled" if enabled else "disabled")
+        for w in self.days_frame.winfo_children():
+            try:
+                w.state((state,))
+            except Exception:
+                try:
+                    w.configure(state="normal" if enabled else "disabled")
+                except Exception:
+                    pass
 
+    def _lock_all_inputs(self):
+        self.entry_name.configure(state="disabled")
+        self.entry_url.configure(state="disabled")
+        self.entry_date.configure(state="disabled")
+        self.entry_time.configure(state="disabled")
+        self.combo_schedule.configure(state="disabled")
+        self._set_weekday_checks_enabled(False)
+
+    def _unlock_all_inputs(self):
+        self.entry_name.configure(state="normal")
+        self.entry_url.configure(state="normal")
+        self.entry_date.configure(state="normal")
+        self.entry_time.configure(state="normal")
+        self.combo_schedule.configure(state="readonly")
+        label = self.schedule_var.get()
+        key = SCHEDULE_FROM_LABEL.get(label, label)
+        self._set_weekday_checks_enabled(key == "WEEKLY")
 if __name__ == "__main__":
     if os.name != "nt": print("Windows only."); sys.exit(1)
     app=App(); app.mainloop()
