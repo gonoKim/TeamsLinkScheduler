@@ -291,6 +291,7 @@ class App(tk.Tk):
         self.tree.pack(fill="both",expand=True,padx=6,pady=6); ctl_fr=ttk.Frame(list_fr); ctl_fr.pack(fill="x",padx=6,pady=6)
         self.tree.bind("<Return>", self.on_tree_row_dblrun)
         self.tree.bind("<Double-Button-1>", self.on_tree_row_dblrun)
+        self.tree.bind("<Escape>", self.on_escape, add="+")
         self.AUTO_EDIT_ON_SINGLE_CLICK = True
         self.tree.bind("<<TreeviewSelect>>", self.on_tree_row_select)
         ttk.Button(ctl_fr, text="削除", command=self.on_delete).pack(side="left")
@@ -320,6 +321,7 @@ class App(tk.Tk):
             )
             messagebox.showinfo("完了", f"タスクを作成/更新しました: {TASK_FOLDER}\\{name}")
             self.refresh_tasks()
+            self.on_clear_form()
         except Exception as e: messagebox.showerror("エラー", str(e))
 
     def refresh_tasks(self):
@@ -492,6 +494,16 @@ class App(tk.Tk):
         self.btn_save.configure(state="normal")
         self.status.set("フォームを初期化しました")
         # for sel in self.tree.selection(): self.tree.selection_remove(sel)
+    def on_escape(self, event=None):
+        try:
+            w = self.focus_get()
+            if isinstance(w, ttk.Combobox):
+                return  # 기본 동작 유지
+        except Exception:
+            pass
+
+        self.on_clear_form()
+        # return "break"
 if __name__ == "__main__":
     if os.name != "nt": print("Windows only."); sys.exit(1)
     app=App(); app.mainloop()
