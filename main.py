@@ -257,7 +257,7 @@ class App(tk.Tk):
         ttk.Label(frm,text="頻度").grid(row=2,column=0,sticky="w",**pad); self.schedule_var = tk.StringVar(value=SCHEDULE_LABELS["WEEKLY"])
         self.combo_schedule = ttk.Combobox(frm,textvariable=self.schedule_var,state="readonly",width=10,values=list(SCHEDULE_LABELS.values()))
         self.combo_schedule.grid(row=2,column=1,sticky="w",**pad)
-        
+        self.combo_schedule.bind("<<ComboboxSelected>>", self.on_schedule_changed)
         ttk.Label(frm,text="開始日（YYYY-MM-DD）").grid(row=2,column=2,sticky="e",**pad); self.date_var=tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
         self.entry_date = ttk.Entry(frm,textvariable=self.date_var,width=14)
         self.entry_date.grid(row=2,column=3,sticky="w",**pad)
@@ -273,7 +273,8 @@ class App(tk.Tk):
             ttk.Checkbutton(self.days_frame, text=label, variable=v).grid(row=0, column=i, sticky="w")
         # self.admin_var=tk.BooleanVar(value=False); ttk.Checkbutton(frm,text="管理者権限で実行（要：Pythonを管理者で起動）",variable=self.admin_var).grid(row=4,column=1,columnspan=3,sticky="w",**pad)
         btn_fr=ttk.Frame(frm); btn_fr.grid(row=5,column=0,columnspan=4,sticky="e",**pad)
-        ttk.Button(btn_fr,text="作成/更新",command=self.on_create).pack(side="left",padx=4); ttk.Button(btn_fr,text="再読み込み",command=self.refresh_tasks).pack(side="left",padx=4)
+        self.btn_save = ttk.Button(btn_fr,text="作成/更新",command=self.on_create)
+        self.btn_save.pack(side="left",padx=4); ttk.Button(btn_fr,text="再読み込み",command=self.refresh_tasks).pack(side="left",padx=4)
         list_fr=ttk.LabelFrame(self,text="登録済みタスク（\TeamsLinks）"); list_fr.pack(fill="both",expand=True,**pad)
         cols=("TaskName","NextRun","State"); self.tree=ttk.Treeview(list_fr,columns=cols,show="headings",height=12)
         for c,t,w in [("TaskName","タスク名",420),("NextRun","次回実行",180),("State","状態",80)]: self.tree.heading(c,text=t); self.tree.column(c,width=w)
@@ -281,8 +282,9 @@ class App(tk.Tk):
         self.tree.bind("<Return>", self.on_tree_row_activate)
         self.AUTO_EDIT_ON_SINGLE_CLICK = True
         self.tree.bind("<<TreeviewSelect>>", self.on_tree_row_select)
-        ttk.Button(ctl_fr,text="選択削除",command=self.on_delete).pack(side="left"); 
-        ttk.Button(ctl_fr,text="実行",command=self.on_run).pack(side="left",padx=6)
+        ttk.Button(ctl_fr, text="削除", command=self.on_delete).pack(side="left")
+        ttk.Button(ctl_fr, text="修正", command=self.on_enable_edit_fields).pack(side="left", padx=6)
+        ttk.Button(ctl_fr, text="実行", command=self.on_run).pack(side="left",padx=6)
         self.status=tk.StringVar(value="準備完了"); ttk.Label(self,textvariable=self.status,anchor="w").pack(fill="x")
     def on_create(self):
         try:
@@ -330,6 +332,23 @@ class App(tk.Tk):
         name=self.tree.item(sel[0],"values")[0]
         try: run_task_now(name); messagebox.showinfo("実行","実行要求を送信しました。")
         except Exception as e: messagebox.showerror("エラー", str(e))
+    def on_enable_edit_fields(self):
+        """修正: 頻度,開始日,時刻만 편집 가능; タスク名/URL은 계속 잠금"""
+        # 폼에 값이 없는 상태에서 실수로 누르면 안내
+        if not self.name_var.get().strip():
+            messagebox.showwarning("注意", "編集するタスクを先に選択してください。")
+            return
+        self.entry_name.configure(state="disabled")
+        self.entry_url.configure(state="disabled")
+        self.combo_schedule.configure(state="readonly")
+        self.entry_date.configure(state="normal")
+        self.entry_time.configure(state="normal")
+        self.btn_save.configure(state="normal")
+        label = self.schedule_var.get()
+        key = SCHEDULE_FROM_LABEL.get(label, label)
+        self._set_weekday_checks_enabled(key == "WEEKLY")
+
+        self.status.set("修正モード: 頻度/開始日/時刻を編集できます")
 
     def on_tree_row_activate(self, event=None):
         try:
@@ -358,14 +377,15 @@ class App(tk.Tk):
             apply_task_to_form(self, task_name)
         except Exception as e:
             self.status.set(f"反映失敗: {e}")
+
     def _set_weekday_checks_enabled(self, enabled: bool):
-        state = ("!disabled" if enabled else "disabled")
+        desired = ("!disabled",) if enabled else ("disabled",)
         for w in self.days_frame.winfo_children():
             try:
-                w.state((state,))
+                w.state(desired)
             except Exception:
                 try:
-                    w.configure(state="normal" if enabled else "disabled")
+                    w.configure(state=("normal" if enabled else "disabled"))
                 except Exception:
                     pass
 
@@ -375,6 +395,7 @@ class App(tk.Tk):
         self.entry_date.configure(state="disabled")
         self.entry_time.configure(state="disabled")
         self.combo_schedule.configure(state="disabled")
+        self.btn_save.configure(state="disabled") 
         self._set_weekday_checks_enabled(False)
 
     def _unlock_all_inputs(self):
@@ -386,6 +407,12 @@ class App(tk.Tk):
         label = self.schedule_var.get()
         key = SCHEDULE_FROM_LABEL.get(label, label)
         self._set_weekday_checks_enabled(key == "WEEKLY")
+
+    def on_schedule_changed(self, event=None):
+        label = self.schedule_var.get()
+        key = SCHEDULE_FROM_LABEL.get(label, label)
+        self._set_weekday_checks_enabled(key == "WEEKLY")
+
 if __name__ == "__main__":
     if os.name != "nt": print("Windows only."); sys.exit(1)
     app=App(); app.mainloop()
