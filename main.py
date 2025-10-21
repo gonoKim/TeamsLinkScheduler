@@ -428,13 +428,10 @@ class App(tk.Tk):
         self.entry_date.configure(state="normal")
         self.entry_time.configure(state="normal")
         self.combo_schedule.configure(state="readonly")
-
-        # 2) 값 초기화
-        # タスク名/URL
-        self.name_var.set(DEFAULT_TASK_PREFIX)           # 필요시 "" 로 유지됨
+        self.tree.selection_set(())  
+        self.tree.focus("")
+        self.name_var.set(DEFAULT_TASK_PREFIX)
         self.url_var.set("")
-
-        # 頻度 (일본어 라벨 사용)
         if 'SCHEDULE_LABELS' in globals():
             self.schedule_var.set(SCHEDULE_LABELS.get(DEFAULT_SCHEDULE_KEY, DEFAULT_SCHEDULE_KEY))
         else:
@@ -448,17 +445,13 @@ class App(tk.Tk):
         for code, var in self.weekly_vars.items():
             var.set(code in DEFAULT_WEEKDAYS)
 
-        # 3) 頻度에 따라 요일 체크 활성/비활성
         key = DEFAULT_SCHEDULE_KEY
-        # 일본어 라벨일 경우 현재 콤보값에서 재계산해도 OK
         if 'SCHEDULE_FROM_LABEL' in globals():
             key = SCHEDULE_FROM_LABEL.get(self.schedule_var.get(), DEFAULT_SCHEDULE_KEY)
 
-        # 요일 체크 가능/불가 토글
         try:
             self._set_weekday_checks_enabled(key == "WEEKLY")
         except AttributeError:
-            # 헬퍼가 없다면 간단히 직접 토글
             state = ("!disabled",) if key == "WEEKLY" else ("disabled",)
             for w in self.days_frame.winfo_children():
                 try:
@@ -469,12 +462,8 @@ class App(tk.Tk):
                     except Exception:
                         pass
 
-        # 4) 作成/更新 버튼 활성화
         self.btn_save.configure(state="normal")
-
-        # 5) 상태 표시 & 선택행 해제(선택)
         self.status.set("フォームを初期化しました")
-        # 선택 해제하고 싶다면:
         # for sel in self.tree.selection(): self.tree.selection_remove(sel)
 if __name__ == "__main__":
     if os.name != "nt": print("Windows only."); sys.exit(1)
