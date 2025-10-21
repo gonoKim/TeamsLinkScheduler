@@ -6,6 +6,7 @@
 
 import os, sys, re, traceback
 import tkinter as tk
+import ctypes, atexit
 from tkinter import ttk, messagebox
 from datetime import datetime
 try:
@@ -37,11 +38,36 @@ DEFAULT_WEEKDAYS = ["MON","TUE","WED","THU","FRI"]
 DAYS = {"SUN":1, "MON":2, "TUE":4, "WED":8, "THU":16, "FRI":32, "SAT":64}
 WEEKDAY_MAP = [("月","MON"),("火","TUE"),("水","WED"),("木","THU"),("金","FRI"),("土","SAT"),("日","SUN")]
 
+def ensure_single_instance():
+    """
+    すでに実行中であれば、既存のウィンドウを前面に表示し、現在のプロセスを終了します。
+    戻り値：ミューテックスハンドル（初回実行時）、None（2回目以降は終了）
+    """
+    kernel32 = ctypes.windll.kernel32
+    user32 = ctypes.windll.user32
+
+    MUTEX_NAME = "Global\\TeamsLinkSchedulerSingleton"
+
+    handle = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+    if kernel32.GetLastError() == 183:
+        try:
+            hwnd = user32.FindWindowW(None, APP_TITLE) 
+            if hwnd:
+                SW_RESTORE = 9
+                user32.ShowWindow(hwnd, SW_RESTORE)
+                user32.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
+        sys.exit(0)
+
+    atexit.register(lambda: kernel32.CloseHandle(handle))
+    return handle
+
 def today_str():
     return datetime.now().strftime("%Y-%m-%d")
 
 def extract_url_from_cmdargs(args: str) -> str:
-    # act.Arguments 예: /c start "" "ms-teams://..."  또는  /c start "" "https://..."
+    # act.Arguments : /c start "" "ms-teams://..."  or  /c start "" "https://..."
     m = re.search(r'"(ms-teams://[^"]+|https?://[^"]+)"\s*$', args or "")
     return m.group(1) if m else ""
 
@@ -451,7 +477,6 @@ class App(tk.Tk):
         self._set_weekday_checks_enabled(key == "WEEKLY")
     def on_clear_form(self):
         """全入力を既定値で初期化し、編集可能にする + 作成/更新 活性化"""
-        # 1) 입력 활성화
         self.entry_name.configure(state="normal")
         self.entry_url.configure(state="normal")
         self.entry_date.configure(state="normal")
@@ -498,12 +523,18 @@ class App(tk.Tk):
         try:
             w = self.focus_get()
             if isinstance(w, ttk.Combobox):
-                return  # 기본 동작 유지
+                return
         except Exception:
             pass
 
         self.on_clear_form()
         # return "break"
 if __name__ == "__main__":
-    if os.name != "nt": print("Windows only."); sys.exit(1)
-    app=App(); app.mainloop()
+    if os.name != "nt":
+        print("Windows only.")
+        sys.exit(1)
+
+    ensure_single_instance()
+
+    app = App()
+    app.mainloop()
