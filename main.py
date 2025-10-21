@@ -16,9 +16,10 @@ except ImportError:
     pythoncom = None
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOGO_PATH = os.path.join(BASE_DIR, "logo.png")   # 로고 파일명
-APP_TITLE = "Teams Link Scheduler (COM)"
-TASK_FOLDER = r"\TeamsLinks"   # <-- single leading slash only
+LOGO_PATH = os.path.join(BASE_DIR, "logo.png") 
+LOGO_SPI_PATH = os.path.join(BASE_DIR, "logo_spi.png") 
+APP_TITLE = "Teams Link Scheduler"
+TASK_FOLDER = r"\TeamsLinks"
 DEFAULT_TASK_PREFIX = ""
 TIME_RE = re.compile(r"^\d{2}:\d{2}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -238,16 +239,17 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__(); self.title(APP_TITLE); self.geometry("840x660"); self.minsize(780,560)
         self.logo_img = None
-        if os.path.exists(LOGO_PATH):
+        if os.path.exists(LOGO_PATH) and os.path.exists(LOGO_SPI_PATH):
             try:
                 self.logo_img = tk.PhotoImage(file=LOGO_PATH)
+                self.logo_spi_img = tk.PhotoImage(file=LOGO_SPI_PATH)
                 try:
                     self.iconphoto(True, self.logo_img)
                 except Exception:
                     pass
                 top = ttk.Frame(self)
                 top.pack(fill="x", padx=8, pady=8)
-                ttk.Label(top, image=self.logo_img).pack()
+                ttk.Label(top, image=self.logo_spi_img).pack()
             except Exception as e:
                 print("[Logo] load failed:", e, file=sys.stderr)
         self.create_widgets(); self.refresh_tasks()
