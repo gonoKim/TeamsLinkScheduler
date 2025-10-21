@@ -300,7 +300,7 @@ class App(tk.Tk):
         try:
             name = self.name_var.get().strip() or DEFAULT_TASK_PREFIX + "Task"
             for ch in '\\/:*?"<>|':
-                name = name.replace(cｄ, "_")
+                name = name.replace(ch, "_") 
 
             selected_label = self.schedule_var.get()
             schedule_key = SCHEDULE_FROM_LABEL.get(selected_label, selected_label) 
