@@ -7,7 +7,7 @@
 import os, sys, re, traceback
 import tkinter as tk
 from tkinter import ttk, messagebox
-from datetime import datetime, timezone
+from datetime import datetime
 try:
     import win32com.client
     import pythoncom
@@ -30,9 +30,14 @@ TASK_ACTION_EXEC = 0
 TASK_LOGON_INTERACTIVE_TOKEN = 3
 TASK_CREATE_OR_UPDATE = 6
 TASK_RUNLEVEL_LUA, TASK_RUNLEVEL_HIGHEST = 0,1
-
+DEFAULT_SCHEDULE_KEY = "WEEKLY"
+DEFAULT_TIME = "09:55"
+DEFAULT_WEEKDAYS = ["MON","TUE","WED","THU","FRI"]
 DAYS = {"SUN":1, "MON":2, "TUE":4, "WED":8, "THU":16, "FRI":32, "SAT":64}
 WEEKDAY_MAP = [("月","MON"),("火","TUE"),("水","WED"),("木","THU"),("金","FRI"),("土","SAT"),("日","SUN")]
+
+def today_str():
+    return datetime.now().strftime("%Y-%m-%d")
 
 def extract_url_from_cmdargs(args: str) -> str:
     # act.Arguments 예: /c start "" "ms-teams://..."  또는  /c start "" "https://..."
@@ -274,7 +279,10 @@ class App(tk.Tk):
         # self.admin_var=tk.BooleanVar(value=False); ttk.Checkbutton(frm,text="管理者権限で実行（要：Pythonを管理者で起動）",variable=self.admin_var).grid(row=4,column=1,columnspan=3,sticky="w",**pad)
         btn_fr=ttk.Frame(frm); btn_fr.grid(row=5,column=0,columnspan=4,sticky="e",**pad)
         self.btn_save = ttk.Button(btn_fr,text="作成/更新",command=self.on_create)
-        self.btn_save.pack(side="left",padx=4); ttk.Button(btn_fr,text="再読み込み",command=self.refresh_tasks).pack(side="left",padx=4)
+        self.btn_save.pack(side="left",padx=4); 
+        self.btn_clear = ttk.Button(btn_fr, text="クリア", command=self.on_clear_form)
+        self.btn_clear.pack(side="left", padx=4)
+        ttk.Button(btn_fr,text="再読み込み",command=self.refresh_tasks).pack(side="left",padx=4)
         list_fr=ttk.LabelFrame(self,text="登録済みタスク（\TeamsLinks）"); list_fr.pack(fill="both",expand=True,**pad)
         cols=("TaskName","NextRun","State"); self.tree=ttk.Treeview(list_fr,columns=cols,show="headings",height=12)
         for c,t,w in [("TaskName","タスク名",420),("NextRun","次回実行",180),("State","状態",80)]: self.tree.heading(c,text=t); self.tree.column(c,width=w)
@@ -333,7 +341,7 @@ class App(tk.Tk):
         try: run_task_now(name); messagebox.showinfo("実行","実行要求を送信しました。")
         except Exception as e: messagebox.showerror("エラー", str(e))
     def on_enable_edit_fields(self):
-        """修正: 頻度,開始日,時刻만 편집 가능; タスク名/URL은 계속 잠금"""
+        """修正: 頻度,開始日,時刻のみ修正可能"""
         # 폼에 값이 없는 상태에서 실수로 누르면 안내
         if not self.name_var.get().strip():
             messagebox.showwarning("注意", "編集するタスクを先に選択してください。")
@@ -412,7 +420,62 @@ class App(tk.Tk):
         label = self.schedule_var.get()
         key = SCHEDULE_FROM_LABEL.get(label, label)
         self._set_weekday_checks_enabled(key == "WEEKLY")
+    def on_clear_form(self):
+        """全入力を既定値で初期化し、編集可能にする + 作成/更新 活性化"""
+        # 1) 입력 활성화
+        self.entry_name.configure(state="normal")
+        self.entry_url.configure(state="normal")
+        self.entry_date.configure(state="normal")
+        self.entry_time.configure(state="normal")
+        self.combo_schedule.configure(state="readonly")
 
+        # 2) 값 초기화
+        # タスク名/URL
+        self.name_var.set(DEFAULT_TASK_PREFIX)           # 필요시 "" 로 유지됨
+        self.url_var.set("")
+
+        # 頻度 (일본어 라벨 사용)
+        if 'SCHEDULE_LABELS' in globals():
+            self.schedule_var.set(SCHEDULE_LABELS.get(DEFAULT_SCHEDULE_KEY, DEFAULT_SCHEDULE_KEY))
+        else:
+            self.schedule_var.set(DEFAULT_SCHEDULE_KEY)
+
+        # 開始日/時刻
+        self.date_var.set(today_str())
+        self.time_var.set(DEFAULT_TIME)
+
+        # 曜日 (週次 기본: 月〜金)
+        for code, var in self.weekly_vars.items():
+            var.set(code in DEFAULT_WEEKDAYS)
+
+        # 3) 頻度에 따라 요일 체크 활성/비활성
+        key = DEFAULT_SCHEDULE_KEY
+        # 일본어 라벨일 경우 현재 콤보값에서 재계산해도 OK
+        if 'SCHEDULE_FROM_LABEL' in globals():
+            key = SCHEDULE_FROM_LABEL.get(self.schedule_var.get(), DEFAULT_SCHEDULE_KEY)
+
+        # 요일 체크 가능/불가 토글
+        try:
+            self._set_weekday_checks_enabled(key == "WEEKLY")
+        except AttributeError:
+            # 헬퍼가 없다면 간단히 직접 토글
+            state = ("!disabled",) if key == "WEEKLY" else ("disabled",)
+            for w in self.days_frame.winfo_children():
+                try:
+                    w.state(state)
+                except Exception:
+                    try:
+                        w.configure(state=("normal" if key == "WEEKLY" else "disabled"))
+                    except Exception:
+                        pass
+
+        # 4) 作成/更新 버튼 활성화
+        self.btn_save.configure(state="normal")
+
+        # 5) 상태 표시 & 선택행 해제(선택)
+        self.status.set("フォームを初期化しました")
+        # 선택 해제하고 싶다면:
+        # for sel in self.tree.selection(): self.tree.selection_remove(sel)
 if __name__ == "__main__":
     if os.name != "nt": print("Windows only."); sys.exit(1)
     app=App(); app.mainloop()
