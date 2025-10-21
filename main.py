@@ -187,7 +187,7 @@ def _days_mask_to_codes(mask: int):
     return out
 
 def get_task_info(task_name: str):
-    """タスク名, URL, スケジュール種別, 開始日, 時刻, 曜日(weekly時) を返す"""
+    """タスク名, URL, スケジュール種別, 適用開始日, 時刻, 曜日(weekly時) を返す"""
     require_pywin32()
     svc = connect_service()
     folder = get_or_create_folder(svc, TASK_FOLDER)
@@ -263,7 +263,7 @@ class App(tk.Tk):
         self.combo_schedule = ttk.Combobox(frm,textvariable=self.schedule_var,state="readonly",width=10,values=list(SCHEDULE_LABELS.values()))
         self.combo_schedule.grid(row=2,column=1,sticky="w",**pad)
         self.combo_schedule.bind("<<ComboboxSelected>>", self.on_schedule_changed)
-        ttk.Label(frm,text="開始日（YYYY-MM-DD）").grid(row=2,column=2,sticky="e",**pad); self.date_var=tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
+        ttk.Label(frm,text="適用開始日（YYYY-MM-DD）").grid(row=2,column=2,sticky="e",**pad); self.date_var=tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
         self.entry_date = ttk.Entry(frm,textvariable=self.date_var,width=14)
         self.entry_date.grid(row=2,column=3,sticky="w",**pad)
         ttk.Label(frm,text="時刻（HH:MM 24h）").grid(row=3,column=2,sticky="e",**pad); self.time_var=tk.StringVar(value="09:55")
@@ -287,18 +287,18 @@ class App(tk.Tk):
         cols=("TaskName","NextRun","State"); self.tree=ttk.Treeview(list_fr,columns=cols,show="headings",height=12)
         for c,t,w in [("TaskName","タスク名",420),("NextRun","次回実行",180),("State","状態",80)]: self.tree.heading(c,text=t); self.tree.column(c,width=w)
         self.tree.pack(fill="both",expand=True,padx=6,pady=6); ctl_fr=ttk.Frame(list_fr); ctl_fr.pack(fill="x",padx=6,pady=6)
-        self.tree.bind("<Return>", self.on_tree_row_activate)
+        self.tree.bind("<Return>", self.on_tree_row_dblrun)
+        self.tree.bind("<Double-Button-1>", self.on_tree_row_dblrun)
         self.AUTO_EDIT_ON_SINGLE_CLICK = True
         self.tree.bind("<<TreeviewSelect>>", self.on_tree_row_select)
         ttk.Button(ctl_fr, text="削除", command=self.on_delete).pack(side="left")
         ttk.Button(ctl_fr, text="修正", command=self.on_enable_edit_fields).pack(side="left", padx=6)
-        ttk.Button(ctl_fr, text="実行", command=self.on_run).pack(side="left",padx=6)
         self.status=tk.StringVar(value="準備完了"); ttk.Label(self,textvariable=self.status,anchor="w").pack(fill="x")
     def on_create(self):
         try:
             name = self.name_var.get().strip() or DEFAULT_TASK_PREFIX + "Task"
             for ch in '\\/:*?"<>|':
-                name = name.replace(ch, "_")
+                name = name.replace(cｄ, "_")
 
             selected_label = self.schedule_var.get()
             schedule_key = SCHEDULE_FROM_LABEL.get(selected_label, selected_label) 
@@ -330,19 +330,14 @@ class App(tk.Tk):
     def on_delete(self):
         sel=self.tree.selection()
         if not sel: messagebox.showwarning("注意","削除するタスクを選択してください。"); return
-        name=self.tree.item(sel[0],"values")[0]
+        name=self.tree.item(sel[0],"values")[0]        
+        if not messagebox.askyesno("削除確認", f"「{name}」を削除してもよろしいですか？"):
+            return
         try: delete_task(name); self.refresh_tasks(); messagebox.showinfo("完了","削除しました。")
         except Exception as e: messagebox.showerror("エラー", str(e))
 
-    def on_run(self):
-        sel=self.tree.selection()
-        if not sel: messagebox.showwarning("注意","実行するタスクを選択してください。"); return
-        name=self.tree.item(sel[0],"values")[0]
-        try: run_task_now(name); messagebox.showinfo("実行","実行要求を送信しました。")
-        except Exception as e: messagebox.showerror("エラー", str(e))
     def on_enable_edit_fields(self):
-        """修正: 頻度,開始日,時刻のみ修正可能"""
-        # 폼에 값이 없는 상태에서 실수로 누르면 안내
+        """修正: 頻度,適用開始日,時刻のみ修正可能"""
         if not self.name_var.get().strip():
             messagebox.showwarning("注意", "編集するタスクを先に選択してください。")
             return
@@ -356,7 +351,7 @@ class App(tk.Tk):
         key = SCHEDULE_FROM_LABEL.get(label, label)
         self._set_weekday_checks_enabled(key == "WEEKLY")
 
-        self.status.set("修正モード: 頻度/開始日/時刻を編集できます")
+        self.status.set("修正モード: 頻度/適用開始日/時刻を編集できます")
 
     def on_tree_row_activate(self, event=None):
         try:
@@ -385,6 +380,36 @@ class App(tk.Tk):
             apply_task_to_form(self, task_name)
         except Exception as e:
             self.status.set(f"反映失敗: {e}")
+
+    def on_tree_row_dblrun(self, event):
+        """ダブルクリック（実行）"""
+        try:
+            region = self.tree.identify("region", event.x, event.y)
+            if region not in ("tree", "cell"):
+                return
+
+            item_id = self.tree.identify_row(event.y)
+            if not item_id:
+                sel = self.tree.selection()
+                if not sel:
+                    return
+                item_id = sel[0]
+
+            values = self.tree.item(item_id, "values") or ()
+            if not values:
+                return
+            task_name = values[0]
+
+            if not messagebox.askyesno("実行確認", f"「{task_name}」を実行しますか？"):
+                return
+
+            run_task_now(task_name)
+            self.status.set(f"実行要求を送信しました: {task_name}")
+
+            # self.tree.selection_set(())
+            # self.tree.focus("")
+        except Exception as e:
+            messagebox.showerror("エラー", f"実行に失敗しました: {e}")
 
     def _set_weekday_checks_enabled(self, enabled: bool):
         desired = ("!disabled",) if enabled else ("disabled",)
@@ -437,7 +462,7 @@ class App(tk.Tk):
         else:
             self.schedule_var.set(DEFAULT_SCHEDULE_KEY)
 
-        # 開始日/時刻
+        # 適用開始日/時刻
         self.date_var.set(today_str())
         self.time_var.set(DEFAULT_TIME)
 
