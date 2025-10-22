@@ -25,6 +25,20 @@ pyinstaller `
   --add-data "logo_spi.png;." `
   .\main.py
 
+## 実行ファイル（.exe）のアイコンを直接埋め込む
+
+1. 「Resource Hacker」 という無料ツールをインストール。
+    https://www.angusj.com/resourcehacker/
+
+2. Resource Hacker を開いて
+   → TeamsLinkScheduler.exe を開く。
+
+3. 左のツリーで Icon Group を選択。
+   → 右クリックして「Replace Resource...」を選択。
+
+4.  新しい .ico ファイルを指定して「Replace」。
+
+5. 「File」→「Save As」で保存（元のファイルを上書きしないように注意）。
 
 ## 備考
 - 管理者タスクは管理者で起動したシェルから実行。
