@@ -374,7 +374,7 @@ class App(tk.Tk):
     def on_enable_edit_fields(self):
         """修正: 頻度,適用開始日,時刻のみ修正可能"""
         if not self.name_var.get().strip():
-            messagebox.showwarning("注意", "編集するタスクを先に選択してください。")
+            messagebox.showwarning("注意", "修正するタスクを先に選択してください。")
             return
         self.entry_name.configure(state="disabled")
         self.entry_url.configure(state="disabled")
@@ -386,7 +386,7 @@ class App(tk.Tk):
         key = SCHEDULE_FROM_LABEL.get(label, label)
         self._set_weekday_checks_enabled(key == "WEEKLY")
 
-        self.status.set("修正モード: 頻度/適用開始日/時刻を編集できます")
+        self.status.set("修正モード: 頻度/適用開始日/時刻を修正できます")
 
     def on_tree_row_activate(self, event=None):
         try:
@@ -481,7 +481,7 @@ class App(tk.Tk):
         key = SCHEDULE_FROM_LABEL.get(label, label)
         self._set_weekday_checks_enabled(key == "WEEKLY")
     def on_clear_form(self):
-        """全入力を既定値で初期化し、編集可能にする + 作成/更新 活性化"""
+        """全入力を既定値で初期化し、修正可能にする + 作成/更新 活性化"""
         self.entry_name.configure(state="normal")
         self.entry_url.configure(state="normal")
         self.entry_date.configure(state="normal")
