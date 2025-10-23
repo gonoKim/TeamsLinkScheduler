@@ -21,9 +21,8 @@ except ImportError:
 
 # --- 定数/設定 ---------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOGO_PATH     = os.path.join(BASE_DIR, "logo.png")
-LOGO_SPI_PATH = os.path.join(BASE_DIR, "logo_spi.png")
-APP_TITLE = "Teams Link Scheduler"
+LOGO_PATH  = os.path.join(BASE_DIR, "logo.png")
+APP_TITLE = "Link Scheduler"
 
 # ルートフォルダ（グループの親）
 TASK_FOLDER = r"\TeamsLinks"
