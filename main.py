@@ -363,7 +363,12 @@ class App(tk.Tk):
         name=self.tree.item(sel[0],"values")[0]        
         if not messagebox.askyesno("削除確認", f"「{name}」を削除してもよろしいですか？"):
             return
-        try: delete_task(name); self.refresh_tasks(); messagebox.showinfo("完了","削除しました。")
+        try: 
+            delete_task(name)
+            self.on_clear_form()
+            self.refresh_tasks()
+            messagebox.showinfo("完了","削除しました。")
+
         except Exception as e: messagebox.showerror("エラー", str(e))
 
     def on_enable_edit_fields(self):
