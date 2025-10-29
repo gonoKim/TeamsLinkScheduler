@@ -459,7 +459,8 @@ class App(tk.Tk):
         ctl_fr = ttk.Frame(list_fr); ctl_fr.pack(fill="x", padx=6, pady=6)
         ttk.Button(ctl_fr, text="削除", command=self.on_delete).pack(side="left")
         ttk.Button(ctl_fr, text="修正", command=self.on_enable_edit_fields).pack(side="left", padx=6)
-
+        ttk.Button(ctl_fr, text="URLコピー", command=self.on_copy_url_from_selected_task)\
+            .pack(side="left", padx=6)
         # 一覧の操作系バインド
         self.tree.bind("<Double-Button-1>", self.on_tree_row_dblrun)  # ダブルクリック＝実行
         self.tree.bind("<Return>", self.on_tree_run_enter)            # Enter＝実行
@@ -756,6 +757,26 @@ class App(tk.Tk):
         except Exception:
             # 取得に失敗したら赤にはしない（安全側）
             return False
+
+    def on_copy_url_from_selected_task(self):
+        """一覧で選択中のタスクから URL を取得してコピー"""
+        try:
+            sel = self.tree.selection()
+            if not sel:
+                messagebox.showwarning("注意", "URL をコピーするタスクを選択してください。")
+                return
+            task_name = self.tree.item(sel[0], "values")[0]
+            info = get_task_info(task_name, self.group_var.get() or DEFAULT_GROUP)
+            url = (info.get("url") or "").strip()
+            if not url:
+                messagebox.showwarning("注意", "このタスクには URL が設定されていません。")
+                return
+            self.clipboard_clear()
+            self.clipboard_append(url)
+            self.update()
+            self.status.set(f"URL をコピーしました: {task_name}")
+        except Exception as e:
+            messagebox.showerror("エラー", f"コピーに失敗しました: {e}")
 
 
 
